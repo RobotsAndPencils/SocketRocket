@@ -38,7 +38,7 @@ extern NSString *const SRStubSocketErrorDomain;
 
 @interface SRStubSocket : SRBaseSocket
 
-@property (nonatomic, assign) id <SRStubSocketDelegate> delegate;
+@property (nonatomic, assign) id <SRWebSocketDelegate> delegate;
 
 @property (nonatomic, readonly) SRReadyState readyState;
 @property (nonatomic, readonly, retain) NSURL *url;
