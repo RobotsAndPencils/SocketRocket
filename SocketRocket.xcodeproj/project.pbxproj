@@ -7,7 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		4FDE151D1829B150006723F6 /* SRBaseSocket.h in Headers */ = {isa = PBXBuildFile; fileRef = 4FDE151B1829B150006723F6 /* SRBaseSocket.h */; };
+		4FDE151D1829B150006723F6 /* SRBaseSocket.h in Headers */ = {isa = PBXBuildFile; fileRef = 4FDE151B1829B150006723F6 /* SRBaseSocket.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		4FDE151E1829B150006723F6 /* SRBaseSocket.h in Headers */ = {isa = PBXBuildFile; fileRef = 4FDE151B1829B150006723F6 /* SRBaseSocket.h */; };
 		4FDE151F1829B150006723F6 /* SRBaseSocket.m in Sources */ = {isa = PBXBuildFile; fileRef = 4FDE151C1829B150006723F6 /* SRBaseSocket.m */; };
 		4FDE15201829B150006723F6 /* SRBaseSocket.m in Sources */ = {isa = PBXBuildFile; fileRef = 4FDE151C1829B150006723F6 /* SRBaseSocket.m */; };
