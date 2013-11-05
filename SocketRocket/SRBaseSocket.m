@@ -191,7 +191,7 @@ typedef void (^data_callback)(SRWebSocket *webSocket,  NSData *data);
 
 @end
 
-@interface SRWebSocket ()  <NSStreamDelegate>
+@interface SRBaseSocket ()  <NSStreamDelegate>
 
 - (void)_writeData:(NSData *)data;
 - (void)_closeWithProtocolError:(NSString *)message;
