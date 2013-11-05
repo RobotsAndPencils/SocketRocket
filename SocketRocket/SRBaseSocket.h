@@ -19,26 +19,26 @@
 
 #import "SRBaseSocket.h"
 
-//typedef enum {
-//    SR_CONNECTING   = 0,
-//    SR_OPEN         = 1,
-//    SR_CLOSING      = 2,
-//    SR_CLOSED       = 3,
-//} SRReadyState;
+typedef enum {
+    SR_CONNECTING   = 0,
+    SR_OPEN         = 1,
+    SR_CLOSING      = 2,
+    SR_CLOSED       = 3,
+} SRReadyState;
 
-@class SRStubSocket;
+@class SRWebSocket;
 
-extern NSString *const SRStubSocketErrorDomain;
+extern NSString *const SRWebSocketErrorDomain;
 
-#pragma mark - SRStubSocketDelegate
+#pragma mark - SRWebSocketDelegate
 
-@protocol SRStubSocketDelegate;
+@protocol SRWebSocketDelegate;
 
-#pragma mark - SRStubSocket
+#pragma mark - SRWebSocket
 
-@interface SRStubSocket : SRBaseSocket
+@interface SRBaseSocket : NSObject <NSStreamDelegate>
 
-@property (nonatomic, assign) id <SRStubSocketDelegate> delegate;
+@property (nonatomic, assign) id <SRWebSocketDelegate> delegate;
 
 @property (nonatomic, readonly) SRReadyState readyState;
 @property (nonatomic, readonly, retain) NSURL *url;
@@ -64,7 +64,7 @@ extern NSString *const SRStubSocketErrorDomain;
 - (void)scheduleInRunLoop:(NSRunLoop *)aRunLoop forMode:(NSString *)mode;
 - (void)unscheduleFromRunLoop:(NSRunLoop *)aRunLoop forMode:(NSString *)mode;
 
-// SRStubSockets are intended for one-time-use only.  Open should be called once and only once.
+// SRWebSockets are intended for one-time-use only.  Open should be called once and only once.
 - (void)open;
 
 - (void)close;
@@ -75,42 +75,42 @@ extern NSString *const SRStubSocketErrorDomain;
 
 @end
 
-//#pragma mark - SRStubSocketDelegate
-//
-//@protocol SRStubSocketDelegate <NSObject>
-//
-//// message will either be an NSString if the server is using text
-//// or NSData if the server is using binary.
-//- (void)webSocket:(SRStubSocket *)webSocket didReceiveMessage:(id)message;
-//
-//@optional
-//
-//- (void)webSocketDidOpen:(SRStubSocket *)webSocket;
-//- (void)webSocket:(SRStubSocket *)webSocket didFailWithError:(NSError *)error;
-//- (void)webSocket:(SRStubSocket *)webSocket didCloseWithCode:(NSInteger)code reason:(NSString *)reason wasClean:(BOOL)wasClean;
-//
-//@end
-//
-//#pragma mark - NSURLRequest (CertificateAdditions)
-//
-//@interface NSURLRequest (CertificateAdditions)
-//
-//@property (nonatomic, retain, readonly) NSArray *SR_SSLPinnedCertificates;
-//
-//@end
-//
-//#pragma mark - NSMutableURLRequest (CertificateAdditions)
-//
-//@interface NSMutableURLRequest (CertificateAdditions)
-//
-//@property (nonatomic, retain) NSArray *SR_SSLPinnedCertificates;
-//
-//@end
-//
-//#pragma mark - NSRunLoop (SRStubSocket)
-//
-//@interface NSRunLoop (SRStubSocket)
-//
-//+ (NSRunLoop *)SR_networkRunLoop;
-//
-//@end
+#pragma mark - SRWebSocketDelegate
+
+@protocol SRWebSocketDelegate <NSObject>
+
+// message will either be an NSString if the server is using text
+// or NSData if the server is using binary.
+- (void)webSocket:(SRWebSocket *)webSocket didReceiveMessage:(id)message;
+
+@optional
+
+- (void)webSocketDidOpen:(SRWebSocket *)webSocket;
+- (void)webSocket:(SRWebSocket *)webSocket didFailWithError:(NSError *)error;
+- (void)webSocket:(SRWebSocket *)webSocket didCloseWithCode:(NSInteger)code reason:(NSString *)reason wasClean:(BOOL)wasClean;
+
+@end
+
+#pragma mark - NSURLRequest (CertificateAdditions)
+
+@interface NSURLRequest (CertificateAdditions)
+
+@property (nonatomic, retain, readonly) NSArray *SR_SSLPinnedCertificates;
+
+@end
+
+#pragma mark - NSMutableURLRequest (CertificateAdditions)
+
+@interface NSMutableURLRequest (CertificateAdditions)
+
+@property (nonatomic, retain) NSArray *SR_SSLPinnedCertificates;
+
+@end
+
+#pragma mark - NSRunLoop (SRWebSocket)
+
+@interface NSRunLoop (SRWebSocket)
+
++ (NSRunLoop *)SR_networkRunLoop;
+
+@end

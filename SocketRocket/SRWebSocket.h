@@ -17,12 +17,14 @@
 #import <Foundation/Foundation.h>
 #import <Security/SecCertificate.h>
 
-typedef enum {
-    SR_CONNECTING   = 0,
-    SR_OPEN         = 1,
-    SR_CLOSING      = 2,
-    SR_CLOSED       = 3,
-} SRReadyState;
+#import "SRBaseSocket.h"
+
+//typedef enum {
+//    SR_CONNECTING   = 0,
+//    SR_OPEN         = 1,
+//    SR_CLOSING      = 2,
+//    SR_CLOSED       = 3,
+//} SRReadyState;
 
 @class SRWebSocket;
 
@@ -34,7 +36,7 @@ extern NSString *const SRWebSocketErrorDomain;
 
 #pragma mark - SRWebSocket
 
-@interface SRWebSocket : NSObject <NSStreamDelegate>
+@interface SRWebSocket : SRBaseSocket
 
 @property (nonatomic, assign) id <SRWebSocketDelegate> delegate;
 
@@ -73,42 +75,42 @@ extern NSString *const SRWebSocketErrorDomain;
 
 @end
 
-#pragma mark - SRWebSocketDelegate
+//#pragma mark - SRWebSocketDelegate
+//
+//@protocol SRWebSocketDelegate <NSObject>
+//
+//// message will either be an NSString if the server is using text
+//// or NSData if the server is using binary.
+//- (void)webSocket:(SRWebSocket *)webSocket didReceiveMessage:(id)message;
+//
+//@optional
+//
+//- (void)webSocketDidOpen:(SRWebSocket *)webSocket;
+//- (void)webSocket:(SRWebSocket *)webSocket didFailWithError:(NSError *)error;
+//- (void)webSocket:(SRWebSocket *)webSocket didCloseWithCode:(NSInteger)code reason:(NSString *)reason wasClean:(BOOL)wasClean;
+//
+//@end
 
-@protocol SRWebSocketDelegate <NSObject>
-
-// message will either be an NSString if the server is using text
-// or NSData if the server is using binary.
-- (void)webSocket:(SRWebSocket *)webSocket didReceiveMessage:(id)message;
-
-@optional
-
-- (void)webSocketDidOpen:(SRWebSocket *)webSocket;
-- (void)webSocket:(SRWebSocket *)webSocket didFailWithError:(NSError *)error;
-- (void)webSocket:(SRWebSocket *)webSocket didCloseWithCode:(NSInteger)code reason:(NSString *)reason wasClean:(BOOL)wasClean;
-
-@end
-
-#pragma mark - NSURLRequest (CertificateAdditions)
-
-@interface NSURLRequest (CertificateAdditions)
-
-@property (nonatomic, retain, readonly) NSArray *SR_SSLPinnedCertificates;
-
-@end
-
-#pragma mark - NSMutableURLRequest (CertificateAdditions)
-
-@interface NSMutableURLRequest (CertificateAdditions)
-
-@property (nonatomic, retain) NSArray *SR_SSLPinnedCertificates;
-
-@end
-
-#pragma mark - NSRunLoop (SRWebSocket)
-
-@interface NSRunLoop (SRWebSocket)
-
-+ (NSRunLoop *)SR_networkRunLoop;
-
-@end
+//#pragma mark - NSURLRequest (CertificateAdditions)
+//
+//@interface NSURLRequest (CertificateAdditions)
+//
+//@property (nonatomic, retain, readonly) NSArray *SR_SSLPinnedCertificates;
+//
+//@end
+//
+//#pragma mark - NSMutableURLRequest (CertificateAdditions)
+//
+//@interface NSMutableURLRequest (CertificateAdditions)
+//
+//@property (nonatomic, retain) NSArray *SR_SSLPinnedCertificates;
+//
+//@end
+//
+//#pragma mark - NSRunLoop (SRWebSocket)
+//
+//@interface NSRunLoop (SRWebSocket)
+//
+//+ (NSRunLoop *)SR_networkRunLoop;
+//
+//@end
