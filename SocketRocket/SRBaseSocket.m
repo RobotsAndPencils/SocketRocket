@@ -164,7 +164,7 @@ NSString *const SRWebSocketErrorDomain = @"SRWebSocketErrorDomain";
 // Sends bytes to callback handler;
 typedef size_t (^stream_scanner)(NSData *collected_data);
 
-typedef void (^data_callback)(SRWebSocket *webSocket,  NSData *data);
+typedef void (^data_callback)(SRBaseSocket *webSocket,  NSData *data);
 
 @interface SRIOConsumer : NSObject {
     stream_scanner _scanner;
@@ -228,7 +228,7 @@ typedef void (^data_callback)(SRWebSocket *webSocket,  NSData *data);
 @end
 
 
-@implementation SRWebSocket {
+@implementation SRBaseSocket {
     NSInteger _webSocketVersion;
     
     NSOperationQueue *_delegateOperationQueue;
@@ -280,7 +280,7 @@ typedef void (^data_callback)(SRWebSocket *webSocket,  NSData *data);
     NSMutableSet *_scheduledRunloops;
     
     // We use this to retain ourselves.
-    __strong SRWebSocket *_selfRetain;
+    __strong SRBaseSocket *_selfRetain;
     
     NSArray *_requestedProtocols;
     SRIOConsumerPool *_consumerPool;
@@ -502,7 +502,7 @@ static __strong NSData *CRLFCRLF;
         _receivedHTTPHeaders = CFHTTPMessageCreateEmpty(NULL, NO);
     }
                         
-    [self _readUntilHeaderCompleteWithCallback:^(SRWebSocket *self,  NSData *data) {
+    [self _readUntilHeaderCompleteWithCallback:^(SRBaseSocket *self,  NSData *data) {
         CFHTTPMessageAppendBytes(_receivedHTTPHeaders, (const UInt8 *)data.bytes, data.length);
         
         if (CFHTTPMessageIsHeaderComplete(_receivedHTTPHeaders)) {
@@ -920,7 +920,7 @@ static inline BOOL closeCodeIsValid(int closeCode) {
             }
         }
     } else {
-        [self _addConsumerWithDataLength:frame_header.payload_length callback:^(SRWebSocket *self, NSData *newData) {
+        [self _addConsumerWithDataLength:frame_header.payload_length callback:^(SRBaseSocket *self, NSData *newData) {
             if (isControlFrame) {
                 [self _handleFrameWithData:newData opCode:frame_header.opcode];
             } else {
@@ -969,7 +969,7 @@ static const uint8_t SRPayloadLenMask   = 0x7F;
 {
     assert((_currentFrameCount == 0 && _currentFrameOpcode == 0) || (_currentFrameCount > 0 && _currentFrameOpcode > 0));
 
-    [self _addConsumerWithDataLength:2 callback:^(SRWebSocket *self, NSData *data) {
+    [self _addConsumerWithDataLength:2 callback:^(SRBaseSocket *self, NSData *data) {
         __block frame_header header = {0};
         
         const uint8_t *headerBuffer = data.bytes;
@@ -1019,7 +1019,7 @@ static const uint8_t SRPayloadLenMask   = 0x7F;
         if (extra_bytes_needed == 0) {
             [self _handleFrameHeader:header curData:self->_currentFrameData];
         } else {
-            [self _addConsumerWithDataLength:extra_bytes_needed callback:^(SRWebSocket *self, NSData *data) {
+            [self _addConsumerWithDataLength:extra_bytes_needed callback:^(SRBaseSocket *self, NSData *data) {
                 size_t mapped_size = data.length;
                 const void *mapped_buffer = data.bytes;
                 size_t offset = 0;
