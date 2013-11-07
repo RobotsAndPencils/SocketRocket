@@ -37,6 +37,10 @@
 #import "base64.h"
 #import "NSData+SRB64Additions.h"
 
+
+#include <sys/socket.h>
+#include <netinet/in.h>
+
 #if OS_OBJECT_USE_OBJC_RETAIN_RELEASE
 #define sr_dispatch_retain(x)
 #define sr_dispatch_release(x)
@@ -217,6 +221,7 @@ typedef void (^data_callback)(SRBaseSocket *webSocket,  NSData *data);
 - (BOOL)_checkHandshake:(CFHTTPMessageRef)httpMessage;
 - (void)_SR_commonInit;
 
+- (void)_initializeServerStreams;
 - (void)_initializeStreams;
 - (void)_connect;
 
@@ -224,6 +229,11 @@ typedef void (^data_callback)(SRBaseSocket *webSocket,  NSData *data);
 
 @property (nonatomic) NSOperationQueue *delegateOperationQueue;
 @property (nonatomic) dispatch_queue_t delegateDispatchQueue;
+
+@property (nonatomic, assign, readwrite) CFSocketRef listeningipv4Socket;
+@property (nonatomic, assign, readwrite) CFSocketRef listeningipv6Socket;
+
+@property (nonatomic, assign, getter = isReceiving) BOOL receiving;
 
 @end
 
@@ -284,6 +294,9 @@ typedef void (^data_callback)(SRBaseSocket *webSocket,  NSData *data);
     
     NSArray *_requestedProtocols;
     SRIOConsumerPool *_consumerPool;
+    
+    SRSocketType _socketType;
+    NSUInteger _serverSocketPort;
 }
 
 @synthesize delegate = _delegate;
@@ -298,7 +311,7 @@ static __strong NSData *CRLFCRLF;
     CRLFCRLF = [[NSData alloc] initWithBytes:"\r\n\r\n" length:4];
 }
 
-- (id)initWithURLRequest:(NSURLRequest *)request protocols:(NSArray *)protocols;
+- (id)initWithURLRequest:(NSURLRequest *)request protocols:(NSArray *)protocols socketType:(SRSocketType)socketType;
 {
     self = [super init];
     if (self) {
@@ -308,10 +321,16 @@ static __strong NSData *CRLFCRLF;
         
         _requestedProtocols = [protocols copy];
         
+        _socketType = socketType;
+        
         [self _SR_commonInit];
     }
     
     return self;
+}
+
+- (id)initWithURLRequest:(NSURLRequest *)request protocols:(NSArray *)protocols {
+    return [self initWithURLRequest:request protocols:protocols socketType:SRSocketTypeClient];
 }
 
 - (id)initWithURLRequest:(NSURLRequest *)request;
@@ -344,7 +363,14 @@ static __strong NSData *CRLFCRLF;
     _consumerStopped = YES;
     _webSocketVersion = 13;
     
-    _workQueue = dispatch_queue_create(NULL, DISPATCH_QUEUE_SERIAL);
+    static const char *queueLabelClient = "SRClientWorkQueue";
+    static const char *queueLabelStub = "SRStubWorkQueue";
+
+    if (_socketType == SRSocketTypeServer) {
+        _workQueue = dispatch_queue_create(queueLabelStub, DISPATCH_QUEUE_SERIAL);
+    } else {
+        _workQueue = dispatch_queue_create(queueLabelClient, DISPATCH_QUEUE_SERIAL);
+    }
     
     // Going to set a specific on the queue so we can validate we're on the work queue
     dispatch_queue_set_specific(_workQueue, (__bridge void *)self, maybe_bridge(_workQueue), NULL);
@@ -363,7 +389,11 @@ static __strong NSData *CRLFCRLF;
     
     _scheduledRunloops = [[NSMutableSet alloc] init];
     
-    [self _initializeStreams];
+    if (_socketType == SRSocketTypeServer) {
+        [self _initializeServerStreams];
+    } else {
+        [self _initializeStreams];
+    }
     
     // default handlers
 }
@@ -417,6 +447,11 @@ static __strong NSData *CRLFCRLF;
     [self _connect];
 }
 
+- (NSUInteger)serverSocketPort;
+{
+    return _serverSocketPort;
+}
+
 // Calls block on delegate queue
 - (void)_performDelegateBlock:(dispatch_block_t)block;
 {
@@ -455,7 +490,7 @@ static __strong NSData *CRLFCRLF;
     return [acceptHeader isEqualToString:expectedAccept];
 }
 
-- (void)_HTTPHeadersDidFinish;
+- (void)_ServerHTTPHeadersDidFinish;
 {
     NSInteger responseCode = CFHTTPMessageGetResponseStatusCode(_receivedHTTPHeaders);
     
@@ -465,6 +500,11 @@ static __strong NSData *CRLFCRLF;
         return;
 
     }
+    
+    // TODO: should be checking that the status code from the server is 101 per rfc6455
+    // TODO: should be checking that the value for the header key |Upgrade| is "websocket"
+    // TODO: should be checking that the value for the header key |Connection| is "upgrade"
+    // NOTE: |Sec-WebSocket-Extensions| are not supported
     
     if(![self _checkHandshake:_receivedHTTPHeaders]) {
         [self _failWithError:[NSError errorWithDomain:SRWebSocketErrorDomain code:2133 userInfo:[NSDictionary dictionaryWithObject:[NSString stringWithFormat:@"Invalid Sec-WebSocket-Accept response"] forKey:NSLocalizedDescriptionKey]]];
@@ -495,26 +535,79 @@ static __strong NSData *CRLFCRLF;
     }];
 }
 
-
-- (void)_readHTTPHeader;
+- (void)_ClientHTTPHeadersDidFinish;
 {
-    if (_receivedHTTPHeaders == NULL) {
-        _receivedHTTPHeaders = CFHTTPMessageCreateEmpty(NULL, NO);
+    NSInteger responseCode = CFHTTPMessageGetResponseStatusCode(_receivedHTTPHeaders);
+    
+    if (responseCode >= 400) {
+        SRFastLog(@"Request failed with response code %d", responseCode);
+        [self _failWithError:[NSError errorWithDomain:@"org.lolrus.SocketRocket" code:2132 userInfo:[NSDictionary dictionaryWithObject:[NSString stringWithFormat:@"received bad response code from server %ld", (long)responseCode] forKey:NSLocalizedDescriptionKey]]];
+        return;
     }
-                        
-    [self _readUntilHeaderCompleteWithCallback:^(SRBaseSocket *self,  NSData *data) {
-        CFHTTPMessageAppendBytes(_receivedHTTPHeaders, (const UInt8 *)data.bytes, data.length);
+    
+    // TODO: fail if not an HTTP/1.1 or higher GET request, including a "Request-URI"
+    // TODO: fail if not a |Host| header field containing the server's authority
+    // TODO: fail if not an |Upgrade| header field containing the value "websocket" (treat case insensitive)
+    // TODO: fail if not a |Connection| header field that includes the token "Upgrade"
+    // TODO: fail if not a |Sec-WebSocket-Key| header field with a base64-encoded value that, when decoded, is 16 bytes in length.
+    // TODO: fail if not a |Sec-WebSocket-Version| header field, with a value of 13
+    
+    // TODO: check the |Sec-WebSocket-Version|
+    
+    NSLog(@"Finished reading headers %@", CFBridgingRelease(CFHTTPMessageCopyAllHeaderFields(_receivedHTTPHeaders)));
+    
+    NSString *clientHandshake = [self _generateClientAcceptHeader:_receivedHTTPHeaders];
+    if(!clientHandshake) {
+        [self _failWithError:[NSError errorWithDomain:SRWebSocketErrorDomain code:2133 userInfo:[NSDictionary dictionaryWithObject:[NSString stringWithFormat:@"Invalid Sec-WebSocket-Key response"] forKey:NSLocalizedDescriptionKey]]];
+        return;
+    }
+    
+    // Sec-WebSocket-Protocol is optional
+    NSString *requestedProtocol = CFBridgingRelease(CFHTTPMessageCopyHeaderFieldValue(_receivedHTTPHeaders, CFSTR("Sec-WebSocket-Protocol")));
+    if (requestedProtocol) {
+        // Make sure we support the protocol?
+        _requestedProtocols = [[requestedProtocol componentsSeparatedByString:@", "] copy]; // this string should be a constant
+        // how do we know what protocols we support?
+        //        if ([_requestedProtocols indexOfObject:requestedProtocol] == NSNotFound) {
+        //            [self _failWithError:[NSError errorWithDomain:SRWebSocketErrorDomain code:2133 userInfo:[NSDictionary dictionaryWithObject:[NSString stringWithFormat:@"Server specified Sec-WebSocket-Protocol that wasn't requested"] forKey:NSLocalizedDescriptionKey]]];
+        //            return;
+        //        }
         
-        if (CFHTTPMessageIsHeaderComplete(_receivedHTTPHeaders)) {
-            SRFastLog(@"Finished reading headers %@", CFBridgingRelease(CFHTTPMessageCopyAllHeaderFields(_receivedHTTPHeaders)));
-            [self _HTTPHeadersDidFinish];
-        } else {
-            [self _readHTTPHeader];
-        }
+        _protocol = [_requestedProtocols objectAtIndex:0]; // for now just pick the first protocol as the spec indicates that they are ordered by preference
+    }
+    
+    // Sec-WebSocket-Extensions is optional and not supported
+    
+    self.readyState = SR_OPEN;
+    
+    if (!_didFail) {
+        [self _writeServerHTTPHeader:clientHandshake];
+        [self _readFrameNew];
+    }
+    [self _performDelegateBlock:^{
+        if ([self.delegate respondsToSelector:@selector(webSocketDidOpen:)]) {
+            [self.delegate webSocketDidOpen:(id)self];
+        };
     }];
 }
 
-- (void)didConnect
+- (NSString *)_generateClientAcceptHeader:(CFHTTPMessageRef)httpMessage;
+{
+    NSString *keyHeader = CFBridgingRelease(CFHTTPMessageCopyHeaderFieldValue(httpMessage, CFSTR("Sec-WebSocket-Key")));
+    
+    if (keyHeader == nil) {
+        return nil;
+    }
+    
+    _secKey = keyHeader; // get the random value from the header, and hash it with the websocket key
+    
+    NSString *concattedString = [_secKey stringByAppendingString:SRWebSocketAppendToSecKeyString];
+    NSString *acceptValue = [concattedString stringBySHA1ThenBase64Encoding];
+    
+    return acceptValue;
+}
+
+- (void)_writeClientHTTPHeader
 {
     SRFastLog(@"Connected");
     CFHTTPMessageRef request = CFHTTPMessageCreateRequest(NULL, CFSTR("GET"), (__bridge CFURLRef)_url, kCFHTTPVersion1_1);
@@ -547,7 +640,241 @@ static __strong NSData *CRLFCRLF;
     CFRelease(request);
 
     [self _writeData:message];
-    [self _readHTTPHeader];
+}
+
+- (void)_writeServerHTTPHeader:(NSString *)acceptHeader
+{
+    
+    CFHTTPMessageRef response = CFHTTPMessageCreateResponse(NULL, 101, CFSTR("Switching Protocols"), kCFHTTPVersion1_1);
+    
+    CFHTTPMessageSetHeaderFieldValue(response, CFSTR("Upgrade"), CFSTR("websocket"));
+    CFHTTPMessageSetHeaderFieldValue(response, CFSTR("Connection"), CFSTR("Upgrade"));
+    CFHTTPMessageSetHeaderFieldValue(response, CFSTR("Sec-WebSocket-Accept"), (__bridge CFStringRef)acceptHeader);
+    
+    if (_protocol) {
+        CFHTTPMessageSetHeaderFieldValue(response, CFSTR("Sec-WebSocket-Protocol"), (__bridge CFStringRef)_protocol);
+    }
+    
+    [_urlRequest.allHTTPHeaderFields enumerateKeysAndObjectsUsingBlock:^(id key, id obj, BOOL *stop) {
+        CFHTTPMessageSetHeaderFieldValue(response, (__bridge CFStringRef)key, (__bridge CFStringRef)obj);
+    }];
+    
+    NSData *message = CFBridgingRelease(CFHTTPMessageCopySerializedMessage(response));
+    
+    CFRelease(response);
+    
+    [self _writeData:message];
+}
+
+- (void)_readServerHTTPHeader;
+{
+    if (_receivedHTTPHeaders == NULL) {
+        _receivedHTTPHeaders = CFHTTPMessageCreateEmpty(NULL, FALSE);
+    }
+                        
+    [self _readUntilHeaderCompleteWithCallback:^(SRBaseSocket *self,  NSData *data) {
+        CFHTTPMessageAppendBytes(_receivedHTTPHeaders, (const UInt8 *)data.bytes, data.length);
+        
+        if (CFHTTPMessageIsHeaderComplete(_receivedHTTPHeaders)) {
+            SRFastLog(@"Finished reading headers %@", CFBridgingRelease(CFHTTPMessageCopyAllHeaderFields(_receivedHTTPHeaders)));
+            [self _ServerHTTPHeadersDidFinish];
+        } else {
+            [self _readServerHTTPHeader];
+        }
+    }];
+}
+
+- (void)_readClientHTTPHeader;
+{
+    if (_receivedHTTPHeaders == NULL) {
+        _receivedHTTPHeaders = CFHTTPMessageCreateEmpty(NULL, TRUE);
+    }
+    
+    [self _readUntilHeaderCompleteWithCallback:^(SRBaseSocket *self,  NSData *data) {
+        CFHTTPMessageAppendBytes(_receivedHTTPHeaders, (const UInt8 *)data.bytes, data.length);
+        
+        if (CFHTTPMessageIsHeaderComplete(_receivedHTTPHeaders)) {
+            SRFastLog(@"Finished reading headers %@", CFBridgingRelease(CFHTTPMessageCopyAllHeaderFields(_receivedHTTPHeaders)));
+            [self _ClientHTTPHeadersDidFinish];
+        } else {
+            [self _readClientHTTPHeader];
+        }
+    }];
+}
+
+- (void)didConnect
+{
+    SRFastLog(@"Connected");
+    
+    if (_socketType == SRSocketTypeServer) {
+        [self _readClientHTTPHeader];
+    } else {
+        [self _writeClientHTTPHeader];
+        [self _readServerHTTPHeader];
+    }
+}
+
+static void AcceptCallback(CFSocketRef socket, CFSocketCallBackType type, CFDataRef address, const void *data, void *info)
+// Called by CFSocket when someone connects to our listening socket.
+// This implementation just bounces the request up to Objective-C.
+{
+    assert(type == kCFSocketAcceptCallBack);
+#pragma unused(type)
+#pragma unused(address)
+    // assert(address == NULL);
+    assert(data != NULL);
+    
+    SRBaseSocket * obj = (__bridge SRBaseSocket *)info;
+    assert(obj != nil);
+    
+    assert(socket == obj->_listeningipv4Socket || socket == obj->_listeningipv6Socket);
+#pragma unused(socket)
+    
+    // For an accept callback, the data parameter is a pointer to a CFSocketNativeHandle.
+    [obj acceptConnection:*(CFSocketNativeHandle *)data];
+}
+
+
+- (void)acceptConnection:(CFSocketNativeHandle)nativeSocketHandle
+{
+    CFReadStreamRef readStream = NULL;
+    CFWriteStreamRef writeStream = NULL;
+    CFStreamCreatePairWithSocket(NULL, nativeSocketHandle, &readStream, &writeStream);
+    if (!(readStream && writeStream)) {
+        // On any failure, we need to destroy the CFSocketNativeHandle
+        // since we are not going to use it any more.
+        (void) close(nativeSocketHandle);
+    }
+    
+    CFReadStreamSetProperty(readStream, kCFStreamPropertyShouldCloseNativeSocket, kCFBooleanTrue);
+    CFWriteStreamSetProperty(writeStream, kCFStreamPropertyShouldCloseNativeSocket, kCFBooleanTrue);
+    
+    _outputStream = CFBridgingRelease(writeStream);
+    _inputStream = CFBridgingRelease(readStream);
+
+    // not supporting secure stuff on the server for now
+    
+    //    if (_secure) {
+    //        NSMutableDictionary *SSLOptions = [[NSMutableDictionary alloc] init];
+    //
+    //        [_outputStream setProperty:(__bridge id)kCFStreamSocketSecurityLevelNegotiatedSSL forKey:(__bridge id)kCFStreamPropertySocketSecurityLevel];
+    //
+    //        // If we're using pinned certs, don't validate the certificate chain
+    //        if ([_urlRequest SR_SSLPinnedCertificates].count) {
+    //            [SSLOptions setValue:[NSNumber numberWithBool:NO] forKey:(__bridge id)kCFStreamSSLValidatesCertificateChain];
+    //        }
+    //
+    //#if DEBUG
+    //        [SSLOptions setValue:[NSNumber numberWithBool:NO] forKey:(__bridge id)kCFStreamSSLValidatesCertificateChain];
+    //        NSLog(@"SocketRocket: In debug mode.  Allowing connection to any root cert");
+    //#endif
+    //
+    //        [_outputStream setProperty:SSLOptions
+    //                            forKey:(__bridge id)kCFStreamPropertySSLSettings];
+    //    }
+    
+    _inputStream.delegate = self;
+    _outputStream.delegate = self;
+    
+    [self open]; // open our streams to fulfill the connection
+    
+}
+
+- (void)_initializeServerStreams;
+{
+// this method should only be used for stubbing client connections
+// the port that the stub "server" opens will be assigned by the OS
+    
+    NSUInteger port = 0;
+    
+    CFSocketContext context = { 0, (__bridge void *) self, NULL, NULL, NULL };
+    CFSocketRef _ipv4cfsock = CFSocketCreate(
+                                              kCFAllocatorDefault,
+                                              PF_INET,
+                                              SOCK_STREAM,
+                                              IPPROTO_TCP,
+                                              kCFSocketAcceptCallBack, AcceptCallback, &context);
+
+    CFSocketRef _ipv6cfsock = CFSocketCreate(
+                                              kCFAllocatorDefault,
+                                              PF_INET6,
+                                              SOCK_STREAM,
+                                              IPPROTO_TCP,
+                                              kCFSocketAcceptCallBack, AcceptCallback, &context);
+
+    
+    if (NULL == _ipv4cfsock || NULL == _ipv6cfsock) {
+        NSLog(@"failed to create socket(s)");
+    }
+
+    // don't know if this resuse is necessary
+    static const int yes = 1;
+    (void) setsockopt(CFSocketGetNative(_ipv4cfsock), SOL_SOCKET, SO_REUSEADDR, (const void *) &yes, sizeof(yes));
+    (void) setsockopt(CFSocketGetNative(_ipv6cfsock), SOL_SOCKET, SO_REUSEADDR, (const void *) &yes, sizeof(yes));
+
+    // Set up the IPv4 listening socket; port is 0, which will cause the kernel to choose a port for us.
+    struct sockaddr_in addr4;
+    memset(&addr4, 0, sizeof(addr4));
+    addr4.sin_len = sizeof(addr4);
+    addr4.sin_family = AF_INET; /* Address family */
+    addr4.sin_port = htons(port); /* Or a specific port */
+    addr4.sin_addr.s_addr = htonl(INADDR_ANY);
+    
+    // Binds a local address to a CFSocket object and configures it for listening.
+    CFDataRef sincfd = CFDataCreate(
+                                    kCFAllocatorDefault,
+                                    (UInt8 *)&addr4,
+                                    sizeof(addr4));
+    
+    CFSocketError sockError = CFSocketSetAddress(_ipv4cfsock, sincfd);
+    CFRelease(sincfd);
+    if (sockError != kCFSocketSuccess) {
+        NSLog(@"failed to bind ipv4 socket");
+    }
+    
+    // Now that the IPv4 binding was successful, we get the port number
+    // -- we will need it for the IPv6 listening socket
+
+    NSData *addr = (__bridge_transfer NSData *)CFSocketCopyAddress(_ipv4cfsock);
+    assert([addr length] == sizeof(struct sockaddr_in));
+    port = ntohs(((const struct sockaddr_in *)[addr bytes])->sin_port);
+
+    NSLog(@"Have listening port : %d", port);
+    _serverSocketPort = port;
+
+    
+    // Set up the IPv6 listening socket.
+    struct sockaddr_in6 addr6;
+    memset(&addr6, 0, sizeof(addr6));
+    addr6.sin6_len = sizeof(addr6);
+    addr6.sin6_family = AF_INET6; /* Address family */
+    addr6.sin6_port = htons(port); /* Or a specific port */
+    memcpy(&(addr6.sin6_addr), &in6addr_any, sizeof(addr6.sin6_addr));
+    
+    // Binds a local address to a CFSocket object and configures it for listening.
+    CFDataRef sin6cfd = CFDataCreate(
+                                     kCFAllocatorDefault,
+                                     (UInt8 *)&addr6,
+                                     sizeof(addr6));
+    
+    sockError = CFSocketSetAddress(_ipv6cfsock, sin6cfd);
+    CFRelease(sin6cfd);
+    if (sockError != kCFSocketSuccess) {
+        NSLog(@"failed to bind ipv6 socket");
+    }
+
+    self.listeningipv4Socket = _ipv4cfsock;
+    self.listeningipv6Socket = _ipv6cfsock;
+    
+    // Set up the run loop sources for the sockets.
+    
+    CFRunLoopSourceRef source4 = CFSocketCreateRunLoopSource(kCFAllocatorDefault, _ipv4cfsock, 0);
+    CFRunLoopAddSource([[NSRunLoop SR_networkServerRunLoop] getCFRunLoop], source4, kCFRunLoopCommonModes);
+    CFRelease(source4);
+    
+    CFRunLoopSourceRef source6 = CFSocketCreateRunLoopSource(kCFAllocatorDefault, _ipv6cfsock, 0);
+    CFRunLoopAddSource([[NSRunLoop SR_networkServerRunLoop] getCFRunLoop], source6, kCFRunLoopCommonModes);
+    CFRelease(source6);
 }
 
 - (void)_initializeStreams;
@@ -597,7 +924,11 @@ static __strong NSData *CRLFCRLF;
 - (void)_connect;
 {
     if (!_scheduledRunloops.count) {
-        [self scheduleInRunLoop:[NSRunLoop SR_networkRunLoop] forMode:NSDefaultRunLoopMode];
+        if (_socketType == SRSocketTypeServer) {
+            [self scheduleInRunLoop:[NSRunLoop SR_networkServerRunLoop] forMode:NSDefaultRunLoopMode];
+        } else {
+            [self scheduleInRunLoop:[NSRunLoop SR_networkClientRunLoop] forMode:NSDefaultRunLoopMode];
+        }
     }
     
     
@@ -998,14 +1329,17 @@ static const uint8_t SRPayloadLenMask   = 0x7F;
         
         header.fin = !!(SRFinMask & headerBuffer[0]);
         
-        
         header.masked = !!(SRMaskMask & headerBuffer[1]);
         header.payload_length = SRPayloadLenMask & headerBuffer[1];
         
         headerBuffer = NULL;
         
-        if (header.masked) {
+        // The server MUST close the connection upon receiving a frame that is not masked.
+        // A client MUST close a connection if it detects a masked frame.
+        if (header.masked && _socketType == SRSocketTypeClient) {
             [self _closeWithProtocolError:@"Client must receive unmasked data"];
+        } else if (!header.masked && _socketType == SRSocketTypeServer) {
+            [self _closeWithProtocolError:@"Server must receive masked data"];
         }
         
         size_t extra_bytes_needed = header.masked ? sizeof(_currentReadMaskKey) : 0;
@@ -1312,7 +1646,12 @@ static const size_t SRFrameHeaderOverhead = 32;
     // set fin
     frame_buffer[0] = SRFinMask | opcode;
     
-    BOOL useMask = YES;
+    BOOL useMask = YES; // default to Client
+    // a client MUST mask all frames that it sends to the server
+    if (_socketType == SRSocketTypeServer) { // A server MUST NOT mask any frames that it sends to the client.
+        useMask = NO;
+    }
+    
 #ifdef NOMASK
     useMask = NO;
 #endif
@@ -1370,6 +1709,8 @@ static const size_t SRFrameHeaderOverhead = 32;
 
 - (void)stream:(NSStream *)aStream handleEvent:(NSStreamEvent)eventCode;
 {
+    assert(aStream == _inputStream || aStream == _outputStream);
+
     if (_secure && !_pinnedCertFound && (eventCode == NSStreamEventHasBytesAvailable || eventCode == NSStreamEventHasSpaceAvailable)) {
         
         NSArray *sslCerts = [_urlRequest SR_SSLPinnedCertificates];
@@ -1692,11 +2033,13 @@ static inline int32_t validate_dispatch_data_partial_string(NSData *data) {
 #endif
 
 static _SRRunLoopThread *networkThread = nil;
+static _SRRunLoopThread *networkStubThread = nil;
 static NSRunLoop *networkRunLoop = nil;
+static NSRunLoop *networkStubRunLoop = nil;
 
-@implementation NSRunLoop (SRWebSocket)
+@implementation NSRunLoop (SRBaseSocket)
 
-+ (NSRunLoop *)SR_networkRunLoop {
++ (NSRunLoop *)SR_networkClientRunLoop {
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
         networkThread = [[_SRRunLoopThread alloc] init];
@@ -1706,6 +2049,18 @@ static NSRunLoop *networkRunLoop = nil;
     });
     
     return networkRunLoop;
+}
+
++ (NSRunLoop *)SR_networkServerRunLoop {
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        networkStubThread = [[_SRRunLoopThread alloc] init];
+        networkStubThread.name = @"com.squareup.SocketRocket.NetworkStubThread";
+        [networkStubThread start];
+        networkStubRunLoop = networkStubThread.runLoop;
+    });
+    
+    return networkStubRunLoop;
 }
 
 @end

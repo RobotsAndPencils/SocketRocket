@@ -38,14 +38,14 @@ extern NSString *const SRWebSocketErrorDomain;
 
 @interface SRWebSocket : SRBaseSocket
 
-@property (nonatomic, assign) id <SRWebSocketDelegate> delegate;
+// @property (nonatomic, assign) id <SRWebSocketDelegate> delegate;
 
-@property (nonatomic, readonly) SRReadyState readyState;
-@property (nonatomic, readonly, retain) NSURL *url;
+// @property (nonatomic, readonly) SRReadyState readyState;
+// @property (nonatomic, readonly, retain) NSURL *url;
 
 // This returns the negotiated protocol.
 // It will be nil until after the handshake completes.
-@property (nonatomic, readonly, copy) NSString *protocol;
+// @property (nonatomic, readonly, copy) NSString *protocol;
 
 // Protocols should be an array of strings that turn into Sec-WebSocket-Protocol.
 - (id)initWithURLRequest:(NSURLRequest *)request protocols:(NSArray *)protocols;

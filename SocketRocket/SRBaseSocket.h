@@ -26,6 +26,11 @@ typedef enum {
     SR_CLOSED       = 3,
 } SRReadyState;
 
+typedef enum {
+    SRSocketTypeClient = 0, // normal use case as a client
+    SRSocketTypeServer, // used to fake server responses
+} SRSocketType;
+
 @class SRWebSocket;
 
 extern NSString *const SRWebSocketErrorDomain;
@@ -48,6 +53,7 @@ extern NSString *const SRWebSocketErrorDomain;
 @property (nonatomic, readonly, copy) NSString *protocol;
 
 // Protocols should be an array of strings that turn into Sec-WebSocket-Protocol.
+- (id)initWithURLRequest:(NSURLRequest *)request protocols:(NSArray *)protocols socketType:(SRSocketType)socketType;
 - (id)initWithURLRequest:(NSURLRequest *)request protocols:(NSArray *)protocols;
 - (id)initWithURLRequest:(NSURLRequest *)request;
 
@@ -72,6 +78,9 @@ extern NSString *const SRWebSocketErrorDomain;
 
 // Send a UTF8 String or Data.
 - (void)send:(id)data;
+
+// If this is a server socket then the socket will be listening on a port
+- (NSUInteger)serverSocketPort;
 
 @end
 
@@ -107,10 +116,11 @@ extern NSString *const SRWebSocketErrorDomain;
 
 @end
 
-#pragma mark - NSRunLoop (SRWebSocket)
+#pragma mark - NSRunLoop (SRBaseSocket)
 
-@interface NSRunLoop (SRWebSocket)
+@interface NSRunLoop (SRBaseSocket)
 
-+ (NSRunLoop *)SR_networkRunLoop;
++ (NSRunLoop *)SR_networkServerRunLoop;
++ (NSRunLoop *)SR_networkClientRunLoop;
 
 @end
