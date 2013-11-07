@@ -530,7 +530,7 @@ static __strong NSData *CRLFCRLF;
 
     [self _performDelegateBlock:^{
         if ([self.delegate respondsToSelector:@selector(webSocketDidOpen:)]) {
-            [self.delegate webSocketDidOpen:self];
+            [self.delegate webSocketDidOpen:(id)self];
         };
     }];
 }
