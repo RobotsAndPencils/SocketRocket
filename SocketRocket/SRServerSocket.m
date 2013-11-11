@@ -15,7 +15,7 @@
 //
 
 
-#import "SRStubSocket.h"
+#import "SRServerSocket.h"
 
 //#if TARGET_OS_IPHONE
 //#define HAS_ICU
@@ -228,7 +228,7 @@
 //@end
 
 
-@implementation SRStubSocket {
+@implementation SRServerSocket {
 //    NSInteger _webSocketVersion;
 //    
 //    NSOperationQueue *_delegateOperationQueue;

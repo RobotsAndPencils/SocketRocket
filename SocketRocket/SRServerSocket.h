@@ -26,7 +26,7 @@
 //    SR_CLOSED       = 3,
 //} SRReadyState;
 
-@class SRStubSocket;
+@class SRServerSocket;
 
 extern NSString *const SRStubSocketErrorDomain;
 
@@ -36,7 +36,7 @@ extern NSString *const SRStubSocketErrorDomain;
 
 #pragma mark - SRStubSocket
 
-@interface SRStubSocket : SRBaseSocket
+@interface SRServerSocket : SRBaseSocket
 
 @property (nonatomic, assign) id <SRWebSocketDelegate> delegate;
 

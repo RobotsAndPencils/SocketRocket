@@ -11,10 +11,10 @@
 		4FDE151E1829B150006723F6 /* SRBaseSocket.h in Headers */ = {isa = PBXBuildFile; fileRef = 4FDE151B1829B150006723F6 /* SRBaseSocket.h */; };
 		4FDE151F1829B150006723F6 /* SRBaseSocket.m in Sources */ = {isa = PBXBuildFile; fileRef = 4FDE151C1829B150006723F6 /* SRBaseSocket.m */; };
 		4FDE15201829B150006723F6 /* SRBaseSocket.m in Sources */ = {isa = PBXBuildFile; fileRef = 4FDE151C1829B150006723F6 /* SRBaseSocket.m */; };
-		4FDE15211829B628006723F6 /* SRStubSocket.h in Headers */ = {isa = PBXBuildFile; fileRef = 4FDE15111829AC9A006723F6 /* SRStubSocket.h */; };
-		4FDE15221829B628006723F6 /* SRStubSocket.h in Headers */ = {isa = PBXBuildFile; fileRef = 4FDE15111829AC9A006723F6 /* SRStubSocket.h */; };
-		4FDE15231829B62B006723F6 /* SRStubSocket.m in Sources */ = {isa = PBXBuildFile; fileRef = 4FDE15121829AC9A006723F6 /* SRStubSocket.m */; };
-		4FDE15241829B62B006723F6 /* SRStubSocket.m in Sources */ = {isa = PBXBuildFile; fileRef = 4FDE15121829AC9A006723F6 /* SRStubSocket.m */; };
+		4FDE15211829B628006723F6 /* SRServerSocket.h in Headers */ = {isa = PBXBuildFile; fileRef = 4FDE15111829AC9A006723F6 /* SRServerSocket.h */; };
+		4FDE15221829B628006723F6 /* SRServerSocket.h in Headers */ = {isa = PBXBuildFile; fileRef = 4FDE15111829AC9A006723F6 /* SRServerSocket.h */; };
+		4FDE15231829B62B006723F6 /* SRServerSocket.m in Sources */ = {isa = PBXBuildFile; fileRef = 4FDE15121829AC9A006723F6 /* SRServerSocket.m */; };
+		4FDE15241829B62B006723F6 /* SRServerSocket.m in Sources */ = {isa = PBXBuildFile; fileRef = 4FDE15121829AC9A006723F6 /* SRServerSocket.m */; };
 		F6016C7C146124B20037BB3D /* base64.c in Sources */ = {isa = PBXBuildFile; fileRef = F6016C7B146124B20037BB3D /* base64.c */; };
 		F6016C7F146124ED0037BB3D /* base64.h in Headers */ = {isa = PBXBuildFile; fileRef = F6016C7E146124ED0037BB3D /* base64.h */; };
 		F6016C8814620EC70037BB3D /* Security.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F6A12CD3145122FC00C1D980 /* Security.framework */; };
@@ -68,8 +68,8 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		4FDE15111829AC9A006723F6 /* SRStubSocket.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = SRStubSocket.h; sourceTree = "<group>"; };
-		4FDE15121829AC9A006723F6 /* SRStubSocket.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = SRStubSocket.m; sourceTree = "<group>"; };
+		4FDE15111829AC9A006723F6 /* SRServerSocket.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = SRServerSocket.h; sourceTree = "<group>"; };
+		4FDE15121829AC9A006723F6 /* SRServerSocket.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = SRServerSocket.m; sourceTree = "<group>"; };
 		4FDE151B1829B150006723F6 /* SRBaseSocket.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = SRBaseSocket.h; sourceTree = "<group>"; };
 		4FDE151C1829B150006723F6 /* SRBaseSocket.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = SRBaseSocket.m; sourceTree = "<group>"; };
 		F6016C7B146124B20037BB3D /* base64.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = base64.c; sourceTree = "<group>"; };
@@ -277,8 +277,8 @@
 				F6A12CD0145119B700C1D980 /* SRWebSocket.m */,
 				4FDE151B1829B150006723F6 /* SRBaseSocket.h */,
 				4FDE151C1829B150006723F6 /* SRBaseSocket.m */,
-				4FDE15111829AC9A006723F6 /* SRStubSocket.h */,
-				4FDE15121829AC9A006723F6 /* SRStubSocket.m */,
+				4FDE15111829AC9A006723F6 /* SRServerSocket.h */,
+				4FDE15121829AC9A006723F6 /* SRServerSocket.m */,
 				F6572123146C7B6A00D6B8A9 /* NSData+SRB64Additions.h */,
 				F6572124146C7B6A00D6B8A9 /* NSData+SRB64Additions.m */,
 			);
@@ -325,7 +325,7 @@
 			files = (
 				F668C8AA153E92F90044DBAC /* SRWebSocket.h in Headers */,
 				4FDE151E1829B150006723F6 /* SRBaseSocket.h in Headers */,
-				4FDE15221829B628006723F6 /* SRStubSocket.h in Headers */,
+				4FDE15221829B628006723F6 /* SRServerSocket.h in Headers */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -333,7 +333,7 @@
 			isa = PBXHeadersBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				4FDE15211829B628006723F6 /* SRStubSocket.h in Headers */,
+				4FDE15211829B628006723F6 /* SRServerSocket.h in Headers */,
 				4FDE151D1829B150006723F6 /* SRBaseSocket.h in Headers */,
 				F6A12CD1145119B700C1D980 /* SRWebSocket.h in Headers */,
 				F6016C7F146124ED0037BB3D /* base64.h in Headers */,
@@ -504,7 +504,7 @@
 			files = (
 				F6396B86153E67EC00345B5E /* SRWebSocket.m in Sources */,
 				F6396B87153E67EC00345B5E /* base64.c in Sources */,
-				4FDE15241829B62B006723F6 /* SRStubSocket.m in Sources */,
+				4FDE15241829B62B006723F6 /* SRServerSocket.m in Sources */,
 				4FDE15201829B150006723F6 /* SRBaseSocket.m in Sources */,
 				F6396B88153E67EC00345B5E /* NSData+SRB64Additions.m in Sources */,
 			);
@@ -516,7 +516,7 @@
 			files = (
 				F6A12CD2145119B700C1D980 /* SRWebSocket.m in Sources */,
 				F6016C7C146124B20037BB3D /* base64.c in Sources */,
-				4FDE15231829B62B006723F6 /* SRStubSocket.m in Sources */,
+				4FDE15231829B62B006723F6 /* SRServerSocket.m in Sources */,
 				4FDE151F1829B150006723F6 /* SRBaseSocket.m in Sources */,
 				F6572126146C7B6A00D6B8A9 /* NSData+SRB64Additions.m in Sources */,
 			);
