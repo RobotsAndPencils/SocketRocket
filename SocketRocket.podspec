@@ -11,5 +11,5 @@ Pod::Spec.new do |s|
   s.ios.frameworks     = %w{CFNetwork Security}
   s.osx.frameworks     = %w{CoreServices Security}
   s.osx.compiler_flags = '-Wno-format'
-  s.libraries          = "icucore"
+  s.libraries          = 'icucore'
 end
