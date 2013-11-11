@@ -301,7 +301,7 @@
 
 - (id)initWithURLRequest:(NSURLRequest *)request protocols:(NSArray *)protocols;
 {
-    self = [super initWithURLRequest:request protocols:protocols];
+    self = [super initWithURLRequest:request protocols:protocols socketType:SRSocketTypeServer];
     if (self) {
         
     }
@@ -432,10 +432,10 @@
 //#endif
 //
 
-- (void)open;
-{
-    [super open];
-}
+//- (void)open;
+//{
+//    [super open];
+//}
 
 //- (void)open;
 //{
@@ -447,6 +447,12 @@
 //    [self _connect];
 //}
 //
+
+- (NSUInteger)serverSocketPort;
+{
+    return [super serverSocketPort];
+}
+
 //// Calls block on delegate queue
 //- (void)_performDelegateBlock:(dispatch_block_t)block;
 //{

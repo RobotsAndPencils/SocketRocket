@@ -38,14 +38,14 @@ extern NSString *const SRStubSocketErrorDomain;
 
 @interface SRServerSocket : SRBaseSocket
 
-@property (nonatomic, assign) id <SRWebSocketDelegate> delegate;
+// @property (nonatomic, assign) id <SRWebSocketDelegate> delegate;
 
-@property (nonatomic, readonly) SRReadyState readyState;
-@property (nonatomic, readonly, retain) NSURL *url;
+// @property (nonatomic, readonly) SRReadyState readyState;
+// @property (nonatomic, readonly, retain) NSURL *url;
 
 // This returns the negotiated protocol.
 // It will be nil until after the handshake completes.
-@property (nonatomic, readonly, copy) NSString *protocol;
+// @property (nonatomic, readonly, copy) NSString *protocol;
 
 // Protocols should be an array of strings that turn into Sec-WebSocket-Protocol.
 - (id)initWithURLRequest:(NSURLRequest *)request protocols:(NSArray *)protocols;
@@ -65,13 +65,17 @@ extern NSString *const SRStubSocketErrorDomain;
 - (void)unscheduleFromRunLoop:(NSRunLoop *)aRunLoop forMode:(NSString *)mode;
 
 // SRStubSockets are intended for one-time-use only.  Open should be called once and only once.
-- (void)open;
+//- (void)open;
+// SRStubSocket is listening for the connection
 
 - (void)close;
 - (void)closeWithCode:(NSInteger)code reason:(NSString *)reason;
 
 // Send a UTF8 String or Data.
 - (void)send:(id)data;
+
+// If this is a stub socket then the socket will be listening on a port
+- (NSUInteger)serverSocketPort;
 
 @end
 
