@@ -839,7 +839,7 @@ static void AcceptCallback(CFSocketRef socket, CFSocketCallBackType type, CFData
     assert([addr length] == sizeof(struct sockaddr_in));
     port = ntohs(((const struct sockaddr_in *)[addr bytes])->sin_port);
 
-    NSLog(@"Have listening port : %d", port);
+    // NSLog(@"Have listening port : %d", port);
     _serverSocketPort = port;
 
     
