@@ -554,7 +554,7 @@ static __strong NSData *CRLFCRLF;
     
     // TODO: check the |Sec-WebSocket-Version|
     
-    NSLog(@"Finished reading headers %@", CFBridgingRelease(CFHTTPMessageCopyAllHeaderFields(_receivedHTTPHeaders)));
+    // NSLog(@"Finished reading headers %@", CFBridgingRelease(CFHTTPMessageCopyAllHeaderFields(_receivedHTTPHeaders)));
     
     NSString *clientHandshake = [self _generateClientAcceptHeader:_receivedHTTPHeaders];
     if(!clientHandshake) {
