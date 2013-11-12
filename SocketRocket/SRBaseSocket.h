@@ -31,6 +31,24 @@ typedef enum {
     SRSocketTypeServer, // used to fake server responses
 } SRSocketType;
 
+typedef enum {
+    SRStatusCodeNormal = 1000,
+    SRStatusCodeGoingAway = 1001,
+    SRStatusCodeProtocolError = 1002,
+    SRStatusCodeUnhandledType = 1003,
+    // 1004 reserved.
+    SRStatusNoStatusReceived = 1005,
+    // 1004-1006 reserved.
+    SRStatusCodeInvalidUTF8 = 1007,
+    SRStatusCodePolicyViolated = 1008,
+    SRStatusCodeMessageTooBig = 1009,
+    SRStatusCodeFailedExtensionNegotiation = 1010,
+    SRStatusCodeUnexpectedCondition = 1011,
+    // 1012-1014 unspecified.
+    // 1015 reserved
+} SRStatusCode;
+
+
 @class SRWebSocket;
 
 extern NSString *const SRWebSocketErrorDomain;
@@ -74,7 +92,7 @@ extern NSString *const SRWebSocketErrorDomain;
 - (void)open;
 
 - (void)close;
-- (void)closeWithCode:(NSInteger)code reason:(NSString *)reason;
+- (void)closeWithCode:(SRStatusCode)code reason:(NSString *)reason;
 
 // Send a UTF8 String or Data.
 - (void)send:(id)data;

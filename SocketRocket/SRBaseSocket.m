@@ -66,19 +66,6 @@ typedef enum  {
     // B-F reserved.
 } SROpCode;
 
-typedef enum {
-    SRStatusCodeNormal = 1000,
-    SRStatusCodeGoingAway = 1001,
-    SRStatusCodeProtocolError = 1002,
-    SRStatusCodeUnhandledType = 1003,
-    // 1004 reserved.
-    SRStatusNoStatusReceived = 1005,
-    // 1004-1006 reserved.
-    SRStatusCodeInvalidUTF8 = 1007,
-    SRStatusCodePolicyViolated = 1008,
-    SRStatusCodeMessageTooBig = 1009,
-} SRStatusCode;
-
 typedef struct {
     BOOL fin;
 //  BOOL rsv1;
@@ -954,10 +941,10 @@ static void AcceptCallback(CFSocketRef socket, CFSocketCallBackType type, CFData
 
 - (void)close;
 {
-    [self closeWithCode:-1 reason:nil];
+    [self closeWithCode:SRStatusCodeNormal reason:nil];
 }
 
-- (void)closeWithCode:(NSInteger)code reason:(NSString *)reason;
+- (void)closeWithCode:(SRStatusCode)code reason:(NSString *)reason;
 {
     assert(code);
     dispatch_async(_workQueue, ^{
@@ -980,7 +967,7 @@ static void AcceptCallback(CFSocketRef socket, CFSocketCallBackType type, CFData
         NSMutableData *mutablePayload = [[NSMutableData alloc] initWithLength:sizeof(uint16_t) + maxMsgSize];
         NSData *payload = mutablePayload;
         
-        ((uint16_t *)mutablePayload.mutableBytes)[0] = EndianU16_BtoN(code);
+        ((uint16_t *)mutablePayload.mutableBytes)[0] = EndianU16_BtoN(code); // TODO: endian-flip appears backwards?  Should be NtoB?
         
         if (reason) {
             NSRange remainingRange = {0};
@@ -1087,14 +1074,14 @@ static void AcceptCallback(CFSocketRef socket, CFSocketCallBackType type, CFData
 
 
 static inline BOOL closeCodeIsValid(int closeCode) {
-    if (closeCode < 1000) {
+    if (closeCode < SRStatusCodeNormal) {
         return NO;
     }
     
-    if (closeCode >= 1000 && closeCode <= 1011) {
-        if (closeCode == 1004 ||
-            closeCode == 1005 ||
-            closeCode == 1006) {
+    if (closeCode >= SRStatusCodeNormal && closeCode <= SRStatusCodeUnexpectedCondition) {
+        if (closeCode > SRStatusCodeUnhandledType &&
+            closeCode < SRStatusNoStatusReceived) {
+            // reserved range
             return NO;
         }
         return YES;
@@ -1152,7 +1139,7 @@ static inline BOOL closeCodeIsValid(int closeCode) {
     [self assertOnWorkQueue];
     
     if (self.readyState == SR_OPEN) {
-        [self closeWithCode:1000 reason:nil];
+        [self closeWithCode:SRStatusCodeNormal reason:nil];
     }
     dispatch_async(_workQueue, ^{
         [self _disconnect];
@@ -1299,7 +1286,8 @@ static const uint8_t SRPayloadLenMask   = 0x7F;
 - (void)_readFrameContinue;
 {
     assert((_currentFrameCount == 0 && _currentFrameOpcode == 0) || (_currentFrameCount > 0 && _currentFrameOpcode > 0));
-
+    __weak __typeof(self)weakSelf = self;
+    __typeof(_socketType)socketType = _socketType;
     [self _addConsumerWithDataLength:2 callback:^(SRBaseSocket *self, NSData *data) {
         __block frame_header header = {0};
         
@@ -1316,12 +1304,12 @@ static const uint8_t SRPayloadLenMask   = 0x7F;
         BOOL isControlFrame = (receivedOpcode == SROpCodePing || receivedOpcode == SROpCodePong || receivedOpcode == SROpCodeConnectionClose);
         
         if (!isControlFrame && receivedOpcode != 0 && self->_currentFrameCount > 0) {
-            [self _closeWithProtocolError:@"all data frames after the initial data frame must have opcode 0"];
+            [weakSelf _closeWithProtocolError:@"all data frames after the initial data frame must have opcode 0"];
             return;
         }
         
         if (receivedOpcode == 0 && self->_currentFrameCount == 0) {
-            [self _closeWithProtocolError:@"cannot continue a message"];
+            [weakSelf _closeWithProtocolError:@"cannot continue a message"];
             return;
         }
         
@@ -1336,10 +1324,10 @@ static const uint8_t SRPayloadLenMask   = 0x7F;
         
         // The server MUST close the connection upon receiving a frame that is not masked.
         // A client MUST close a connection if it detects a masked frame.
-        if (header.masked && _socketType == SRSocketTypeClient) {
-            [self _closeWithProtocolError:@"Client must receive unmasked data"];
-        } else if (!header.masked && _socketType == SRSocketTypeServer) {
-            [self _closeWithProtocolError:@"Server must receive masked data"];
+        if (header.masked && socketType == SRSocketTypeClient) {
+            [weakSelf _closeWithProtocolError:@"Client must receive unmasked data"];
+        } else if (!header.masked && socketType == SRSocketTypeServer) {
+            [weakSelf _closeWithProtocolError:@"Server must receive masked data"];
         }
         
         size_t extra_bytes_needed = header.masked ? sizeof(_currentReadMaskKey) : 0;
@@ -1351,9 +1339,9 @@ static const uint8_t SRPayloadLenMask   = 0x7F;
         }
         
         if (extra_bytes_needed == 0) {
-            [self _handleFrameHeader:header curData:self->_currentFrameData];
+            [weakSelf _handleFrameHeader:header curData:self->_currentFrameData];
         } else {
-            [self _addConsumerWithDataLength:extra_bytes_needed callback:^(SRBaseSocket *self, NSData *data) {
+            [weakSelf _addConsumerWithDataLength:extra_bytes_needed callback:^(SRBaseSocket *self, NSData *data) {
                 size_t mapped_size = data.length;
                 const void *mapped_buffer = data.bytes;
                 size_t offset = 0;
@@ -1377,7 +1365,7 @@ static const uint8_t SRPayloadLenMask   = 0x7F;
                     memcpy(self->_currentReadMaskKey, ((uint8_t *)mapped_buffer) + offset, sizeof(self->_currentReadMaskKey));
                 }
                 
-                [self _handleFrameHeader:header curData:self->_currentFrameData];
+                [weakSelf _handleFrameHeader:header curData:self->_currentFrameData];
             } readToCurrentFrame:NO unmaskBytes:NO];
         }
     } readToCurrentFrame:NO unmaskBytes:NO];
@@ -1392,6 +1380,7 @@ static const uint8_t SRPayloadLenMask   = 0x7F;
         _currentFrameCount = 0;
         _readOpCount = 0;
         _currentStringScanPosition = 0;
+        _currentReadMaskOffset = 0;
         
         [self _readFrameContinue];
     });
@@ -1506,6 +1495,10 @@ static const char CRLFCRLFBytes[] = {'\r', '\n', '\r', '\n'};
     BOOL didWork = NO;
     
     if (self.readyState >= SR_CLOSING) {
+        dispatch_async(_workQueue, ^{
+            _closeCode = SRStatusCodeNormal;
+            [self _disconnect];
+        });
         return didWork;
     }
     
