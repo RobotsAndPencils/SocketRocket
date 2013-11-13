@@ -1170,6 +1170,7 @@ static inline BOOL closeCodeIsValid(int closeCode) {
     }
     [_consumers removeAllObjects];
     _closeWhenFinishedWriting = NO;
+    _sentClose = NO;
 }
 
 - (void)_handleFrameWithData:(NSData *)frameData opCode:(NSInteger)opcode;
