@@ -351,7 +351,7 @@ static __strong NSData *CRLFCRLF;
     _webSocketVersion = 13;
     
     static const char *queueLabelClient = "SRClientWorkQueue";
-    static const char *queueLabelStub = "SRStubWorkQueue";
+    static const char *queueLabelStub = "SRServerWorkQueue";
 
     if (_socketType == SRSocketTypeServer) {
         _workQueue = dispatch_queue_create(queueLabelStub, DISPATCH_QUEUE_SERIAL);
@@ -1026,7 +1026,8 @@ static void AcceptCallback(CFSocketRef socket, CFSocketCallBackType type, CFData
     [self assertOnWorkQueue];
 
     if (_closeWhenFinishedWriting) {
-            return;
+        SRFastLog(@"Closing when finished writing");
+        return;
     }
     [_outputBuffer appendData:data];
     [self _pumpWriting];
@@ -1139,7 +1140,7 @@ static inline BOOL closeCodeIsValid(int closeCode) {
     [self assertOnWorkQueue];
     
     if (self.readyState == SR_OPEN) {
-        [self closeWithCode:SRStatusCodeNormal reason:nil];
+        [self closeWithCode:_closeCode reason:nil]; // per the spec "When sending a Close frame in response, the endpoint typically echos the status code it received.
     }
     dispatch_async(_workQueue, ^{
         [self _disconnect];
@@ -1152,6 +1153,23 @@ static inline BOOL closeCodeIsValid(int closeCode) {
     SRFastLog(@"Trying to disconnect");
     _closeWhenFinishedWriting = YES;
     [self _pumpWriting];
+}
+
+- (void)_prepareServerForNextConnection {
+    
+    if (_socketType != SRSocketTypeServer) {
+        return;
+    }
+    
+    // get ready for the next connection by resetting these items
+    
+    _readyState = SR_CONNECTING;
+    if (_receivedHTTPHeaders) {
+        CFRelease(_receivedHTTPHeaders);
+        _receivedHTTPHeaders = NULL;
+    }
+    [_consumers removeAllObjects];
+    _closeWhenFinishedWriting = NO;
 }
 
 - (void)_handleFrameWithData:(NSData *)frameData opCode:(NSInteger)opcode;
@@ -1204,7 +1222,7 @@ static inline BOOL closeCodeIsValid(int closeCode) {
 {
     assert(frame_header.opcode != 0);
     
-    if (self.readyState != SR_OPEN) {
+    if (self.readyState != SR_OPEN && self.readyState != SR_CLOSING) { // if client sends close, it can wait for close from server before disconnecting (per spec)
         return;
     }
     
@@ -1416,7 +1434,10 @@ static const uint8_t SRPayloadLenMask   = 0x7F;
         [_outputStream close];
         [_inputStream close];
         
-        
+        if (_socketType == SRSocketTypeServer) {
+            [self _prepareServerForNextConnection];
+        }
+
         for (NSArray *runLoop in [_scheduledRunloops copy]) {
             [self unscheduleFromRunLoop:[runLoop objectAtIndex:0] forMode:[runLoop objectAtIndex:1]];
         }
@@ -1494,7 +1515,7 @@ static const char CRLFCRLFBytes[] = {'\r', '\n', '\r', '\n'};
     
     BOOL didWork = NO;
     
-    if (self.readyState >= SR_CLOSING) {
+    if (self.readyState >= SR_CLOSED) { // if we're closing we can still accept a close message as confirmation
         dispatch_async(_workQueue, ^{
             _closeCode = SRStatusCodeNormal;
             [self _disconnect];
